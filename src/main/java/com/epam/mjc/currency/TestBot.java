@@ -36,7 +36,42 @@ public class TestBot extends TelegramLongPollingBot {
     }
   }
 
-  
+  @SneakyThrows
+  private void handleCallback(CallbackQuery callbackQuery) {
+    Message message = callbackQuery.getMessage();
+    String[] param = callbackQuery.getData().split(":");
+    String action = param[0];
+    Currency newCurrency = Currency.valueOf(param[1]);
+    switch (action) {
+      case "ORIGINAL":
+        currencyModeService.setOriginalCurrency(message.getChatId(), newCurrency);
+        break;
+      case "TARGET":
+        currencyModeService.setTargetCurrency(message.getChatId(), newCurrency);
+        break;
+    }
+    List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
+    Currency originalCurrency = currencyModeService.getOriginalCurrency(message.getChatId());
+    Currency targetCurrency = currencyModeService.getTargetCurrency(message.getChatId());
+    for (Currency currency : Currency.values()) {
+      buttons.add(
+              Arrays.asList(
+                      InlineKeyboardButton.builder()
+                              .text(getCurrencyButton(originalCurrency, currency))
+                              .callbackData("ORIGINAL:" + currency)
+                              .build(),
+                      InlineKeyboardButton.builder()
+                              .text(getCurrencyButton(targetCurrency, currency))
+                              .callbackData("TARGET:" + currency)
+                              .build()));
+    }
+    execute(
+            EditMessageReplyMarkup.builder()
+                    .chatId(message.getChatId().toString())
+                    .messageId(message.getMessageId())
+                    .replyMarkup(InlineKeyboardMarkup.builder().keyboard(buttons).build())
+                    .build());
+  }
 
   private Optional<Double> parseDouble(String messageText) {
     try {
