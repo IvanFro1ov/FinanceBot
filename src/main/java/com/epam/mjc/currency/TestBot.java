@@ -73,6 +73,65 @@ public class TestBot extends TelegramLongPollingBot {
                     .build());
   }
 
+  @SneakyThrows
+  private void handleMessage(Message message) {
+    // handle command
+    if (message.hasText() && message.hasEntities()) {
+      Optional<MessageEntity> commandEntity =
+              message.getEntities().stream().filter(e -> "bot_command".equals(e.getType())).findFirst();
+      if (commandEntity.isPresent()) {
+        String command =
+                message
+                        .getText()
+                        .substring(commandEntity.get().getOffset(), commandEntity.get().getLength());
+        switch (command) {
+          case "/set_currency":
+            List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
+            Currency originalCurrency =
+                    currencyModeService.getOriginalCurrency(message.getChatId());
+            Currency targetCurrency = currencyModeService.getTargetCurrency(message.getChatId());
+            for (Currency currency : Currency.values()) {
+              buttons.add(
+                      Arrays.asList(
+                              InlineKeyboardButton.builder()
+                                      .text(getCurrencyButton(originalCurrency, currency))
+                                      .callbackData("ORIGINAL:" + currency)
+                                      .build(),
+                              InlineKeyboardButton.builder()
+                                      .text(getCurrencyButton(targetCurrency, currency))
+                                      .callbackData("TARGET:" + currency)
+                                      .build()));
+            }
+            execute(
+                    SendMessage.builder()
+                            .text("Please choose Original and Target currencies")
+                            .chatId(message.getChatId().toString())
+                            .replyMarkup(InlineKeyboardMarkup.builder().keyboard(buttons).build())
+                            .build());
+            return;
+        }
+      }
+    }
+    if (message.hasText()) {
+      String messageText = message.getText();
+      Optional<Double> value = parseDouble(messageText);
+      Currency originalCurrency = currencyModeService.getOriginalCurrency(message.getChatId());
+      Currency targetCurrency = currencyModeService.getTargetCurrency(message.getChatId());
+      double ratio = currencyConversionService.getConversionRatio(originalCurrency, targetCurrency);
+      if (value.isPresent()) {
+        execute(
+                SendMessage.builder()
+                        .chatId(message.getChatId().toString())
+                        .text(
+                                String.format(
+                                        "%4.2f %s is %4.2f %s",
+                                        value.get(), originalCurrency, (value.get() * ratio), targetCurrency))
+                        .build());
+        return;
+      }
+    }
+  }
+
   private Optional<Double> parseDouble(String messageText) {
     try {
       return Optional.of(Double.parseDouble(messageText));
